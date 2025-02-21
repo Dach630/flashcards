@@ -1,19 +1,22 @@
-#include <string>
+#ifndef CARD_HPP
+#define CARD_HPP
 
-using namespace std::string;
+#include <string>
+using std::string;
 
 class Card{
 public:
-    Card(string question, string answer1, string answer2, short level);
-    Card(string question, string answer1, string answer2);
+    Card(string question, string answer, int level);
+    Card(string question, string answer);
     
     string getQuestion();
-    string getAnswer1();
-    string getAnswer2();
+    string getAnswer();
+    int getLevel();
         
 private:
     string question;
-    string answer1;
-    string answer2;
-    short level;
-}
+    string answer;
+    int level;
+};
+
+#endif //CARD_HPP

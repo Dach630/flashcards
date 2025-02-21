@@ -1,16 +1,23 @@
-#include "Box.hpp"
+#include "../include/Box.hpp"
 
-Boxx::cleanTerminal(){
-#ifdef _WIN32
-    system("cls"); // Windows
-#else
-    system("clear"); // Linux/Mac
-#endif    
+
+
+
+Box::Box(){
+    this->cardsFile.open(this->CARD_FILE_NAME);
+    if(!this->cardsFile){
+        cout << "Impossible d'ouvrir le fichier de cartes\n";
+        exit(1);
+    }
+    this->tempFile.open(this->FILE_NAME_BEFORE_FINISH);
+    if(!this->tempFile){
+        cout << "Impossible d'ouvrir le fichier temp\n";
+        cardsFile.close();
+        exit(1);
+    }
 }
 
-Box::Box(){}
-
-Box::playBox(){
+void Box::playBox(){
     int answer = -1;
     while(answer != 2){
         this->cleanTerminal();
@@ -39,49 +46,74 @@ Box::playBox(){
     this->finish();
 }
 
-Box::shuffle(){
+void Box::shuffle(){
     std::random_device rd;
     std::mt19937 g(rd());
     std::shuffle(this->cards.begin(), this->cards.end(), g);
 }
 
-Box::addUserCard(){
+void Box::addUserCard(){
     string question;
-    string answer1;
-    string answer2;
+    string answer;
 
     std::cout << "Enter la question: \n";
     std::cin >> question;
     std::cout << "Enter la réponce 1: \n";
-    std::cin >> answer1;
-    std::cout << "Enter la réponce 2: \n";
-    std::cin >> answer2;
+    std::cin >> answer;
 
-    this->makeCard(question, answer1, answer2, 0);
+    this->addCard(question, answer, 0);
 }
 
-Box::researchPlayablesCards(){
-    //todo research cardsfile
+vector<string> Box::splitInformation(string information){
+    vector<string> tokens;
+    size_t start = 0, end;
+
+    while ((end = information.find(DELIMITER, start)) != string::npos) {
+        tokens.push_back(information.substr(start, end - start));
+        start = end + 1;
+    }
+
+    tokens.push_back(information.substr(start));
+
+    return tokens;
 }
 
-Box::makeCard(string question, string answer1, string answer2, short level){
-    Card card(question, answer1, answer2, level);
+void Box::researchPlayablesCards(){
+    //cardInformation = question + DELIMITER + answer + DELIMITER + level + DELIMITER + newDateForNextRevision
+    //or cardInformation = question + DELIMITER + answer + DELIMITER + level 
+    string cardInformation;
+    vector<string> cardsToken;
+    while (std::getline(this->cardsFile, cardInformation)){
+        cardsToken = this->splitInformation(cardInformation);
+        if(cardsToken.size() == 3){
+            this->addCard(cardsToken[0], cardsToken[1], std::stoi(cardsToken[2]));
+        }else if(cardsToken.size() == 4){
+            if(this->checkDate(cardsToken[3])){
+                this->addCard(cardsToken[0], cardsToken[1], std::stoi(cardsToken[2]));
+            }else{
+                this->tempFile << cardInformation << "\n";
+            }
+        }
+    }
+}
+
+void Box::addCard(string question, string answer, int level){
+    Card card(question, answer, level);
     this->cards.push_back(card);
 }
 
-Box::int playCard(Card card){
+int Box::playCard(Card card){
     bool noGoodAnswer = true;
     int answer = -1;
     while (answer < 1 && answer > 2){
         this->cleanTerminal();
-        cout << "1. je connais\n"
-        cout << "2. je ne connais pas\n\n"
+        cout << "1. je connais\n";
+        cout << "2. je ne connais pas\n";
         cout << "7. voir les réponces\n";
         cout << "0. Quiter\n";
         cout << card.getQuestion() << "\n\n";
-        if(ansewer == 7){
-            cout << card.getAnswer1() << "\n";
-            cout << card.getAnswer2() << "\n";
+        if(answer == 7){
+            cout << card.getAnswer() << "\n";
         }
         cin >> answer;
         if(cin.fail()){
@@ -91,7 +123,7 @@ Box::int playCard(Card card){
         }
         switch (answer){
             case 0:
-                return -1;
+                this->finish();
             case 1:
                 goodCards.push_back(card);
                 break;
@@ -105,11 +137,81 @@ Box::int playCard(Card card){
     return 0;
 }
 
-Box::finish(){
+void Box::finish(){
     this->cleanTerminal();
     cout << "Fin de la révision\n";
     cout << "Vous avez répondu correctement à " << this->goodCards.size() << " cartes\n";
     cout << "Vous avez répondu incorrectement à " << this->badCards.size() << " cartes\n";
     int remainingCardsIndexStart = this->goodCards.size() + this->badCards.size();
-    //todo write file
+    
+    auto today = floor<days>(system_clock::now());
+    
+    int newLevel;
+    auto newDateForNextRevision = today;
+    for(int i = 0; i < this->goodCards.size(); i++){
+        newLevel = this->goodCards[i].getLevel() + 1;
+        newDateForNextRevision = today + days(this->SPACE_BETWEEN_CARDS[newLevel]);
+        this->tempFile 
+        << this->goodCards[i].getQuestion() << this->DELIMITER 
+        << this->goodCards[i].getAnswer() << this->DELIMITER 
+        << newLevel << this->DELIMITER 
+        << "date"<< "\n"; //todo
+    }
+    newDateForNextRevision = today + days(1);
+    for(int i = 0; i < this->badCards.size(); i++){
+        this->tempFile 
+        << this->badCards[i].getQuestion() << this->DELIMITER 
+        << this->badCards[i].getAnswer() << this->DELIMITER 
+        << 0 << this->DELIMITER 
+        << "newDateForNextRevision" << "\n";
+    }
+    for(int i = remainingCardsIndexStart; i < this->cards.size(); i++){
+        newLevel = this->cards[i].getLevel() - 1;
+        this->tempFile 
+        << this->cards[i].getQuestion() << this->DELIMITER 
+        << this->cards[i].getAnswer() << this->DELIMITER 
+        << newLevel << "\n";
+    }
+    
+    this->closeFiles();
+    
+    if(std::filesystem::remove(CARD_FILE_NAME) != 0){
+        cout << "Impossible de supprimer le fichier cards\n";
+    }
+    try {
+        std::filesystem::rename(FILE_NAME_BEFORE_FINISH, CARD_FILE_NAME);
+    } catch (const std::filesystem::filesystem_error& e) {
+        std::cerr << "Erreur : " << e.what() << std::endl;
+    }
+    exit(0);
+}
+
+void Box::closeFiles(){
+    this->cardsFile.close();
+    this->tempFile.close();
+}
+
+bool Box::checkDate(string information){
+    /*
+    std::tm tm = {};
+    std::istringstream ss(information);
+    ss >> std::get_time(&tm, "%Y-%m-%d"); 
+
+    std::time_t today_t = std::chrono::system_clock::to_time_t(today);
+    std::tm today_tm = *std::localtime(&today_t);
+
+    return std::mktime(const_cast<std::tm*>(&date)) < std::mktime(&today_tm);
+
+    auto today = floor<days>(system_clock::now());
+    */
+    return false;
+}
+
+
+void Box::cleanTerminal(){
+    #ifdef _WIN32
+        system("cls"); // Windows
+    #else
+        system("clear"); // Linux/Mac
+    #endif    
 }

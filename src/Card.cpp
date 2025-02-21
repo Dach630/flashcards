@@ -1,28 +1,31 @@
-#include <Card.hpp>
+#include "../include/Card.hpp"
 
-Card::Card(string question, string answer1, string answer2, int level){
+Card::Card(string question, string answer, int level)
+    : question(question), answer(answer), level((level < 0) ? 0 : (level > 11 ? 11 : level)) {}  // ✅ Initialisation en liste
+
+/*
+Card::Card(string question, string answer, int level){
     this->question = question;
-    this->answer1 = answer1;
-    this->answer2 = answer2;
-    if(level < 0 || level >= 12){
+    this->answer = answer;
+    if(level < 0){
         this->level = 0;
+    }else if (level > 11){
+        this->level = 11;
     }else{
         this->level = level;
     }
 }
+*/
+Card::Card(string question, string answer) : Card(question, answer, 0){}
 
-Card::Card(string question, string answer1, string answer2){
-    Card::Card(question, answer1, answer2, 0);
-}
-
-Card::getQuestion(){
+string Card::getQuestion(){
     return this->question;
 }
 
-Card::getAnswer1(){
-    return this->answer1;
+string Card::getAnswer(){
+    return this->answer;
 }
 
-Card::getAnswer2(){
-    return this->answer2;
+int Card::getLevel(){
+    return this->level;
 }
